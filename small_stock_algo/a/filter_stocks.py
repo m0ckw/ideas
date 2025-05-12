@@ -51,7 +51,7 @@ while True:
 
 # 将筛选结果保存到 CSV 文件
 if stocks:
-    csv_file = "filtered_stocks.csv"
+    csv_file = "tickers.csv"
     with open(csv_file, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(["Stock Code", "Stock Name", "Current Price", "Market Value", "Turnover", "Net Profit"])  # 表头

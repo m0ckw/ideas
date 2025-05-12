@@ -2,6 +2,7 @@ import pandas as pd
 import os
 from glob import glob
 
+
 def backtest(data_folder, file_pattern, start_date, min_price, upper_shadow_threshold, monthly_return_threshold):
     # ========== 加载所有股票数据 ==========
     all_files = glob(os.path.join(data_folder, file_pattern))
@@ -41,14 +42,6 @@ def backtest(data_folder, file_pattern, start_date, min_price, upper_shadow_thre
     for ym in all_months:
         month_df = monthly_prices[monthly_prices['year_month'] == ym].copy()
 
-        # 仅保留股价 >= min_price 且不在剔除名单中的股票
-        filtered = month_df[
-            (month_df['open_price'] >= min_price) & (~month_df['ticker'].isin(excluded_tickers))
-        ].copy()
-
-        if filtered.empty:
-            continue
-
         # 检查上个月是否有数据
         prev_month = ym - 1
         if prev_month not in all_months:
@@ -62,12 +55,20 @@ def backtest(data_folder, file_pattern, start_date, min_price, upper_shadow_thre
         prev_month_df.loc[:, 'monthly_return'] = (prev_month_df['close_price'] / prev_month_df['open_price']) - 1
         excluded_tickers.update(prev_month_df[prev_month_df['monthly_return'] > monthly_return_threshold]['ticker'])
 
+        # 仅保留股价 >= min_price 且不在剔除名单中的股票
+        filtered = month_df[
+            (month_df['open_price'] >= min_price) & (~month_df['ticker'].isin(excluded_tickers))
+            ].copy()
+
+        if filtered.empty:
+            continue
+
         # 计算上个月的上影线比例
         # prev_month_df['upper_shadow_ratio'] = (prev_month_df['high'] - prev_month_df['close_price']) / (prev_month_df['high'] - prev_month_df['low'])
         # excluded_tickers.update(prev_month_df[prev_month_df['upper_shadow_ratio'] > upper_shadow_threshold]['ticker'])
 
         # 选择价格最低的 50 支股票
-        selected = filtered.nsmallest(20, 'open_price')
+        selected = filtered.nsmallest(10, 'open_price')
         selected['return'] = selected['close_price'] / selected['open_price'] - 1
 
         # 最大盈利与最大亏损
@@ -104,6 +105,7 @@ def backtest(data_folder, file_pattern, start_date, min_price, upper_shadow_thre
     final_return = returns_df['cumulative_return'].iloc[-1] - 1
     print(f"\n📈 最终累计收益率: {final_return:.2%}")
 
+
 # 示例调用
 backtest(
     data_folder='./stocks/',
@@ -111,5 +113,5 @@ backtest(
     start_date='2020-01-01',
     min_price=1.5,
     upper_shadow_threshold=0.5,
-    monthly_return_threshold=0.2
+    monthly_return_threshold=0.1
 )

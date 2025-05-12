@@ -9,7 +9,7 @@ ts.set_token('69e069909397db3849328462417ec6813c31b9af8bcecdfb9dbcb7cf')  # 替�
 pro = ts.pro_api()
 
 # 读取股票代码
-input_file = 'a_stocks.csv'
+input_file = 'tickers.csv'
 output_folder = './stocks/'
 df = pd.read_csv(input_file)
 stock_codes = df['Stock Code'].tolist()

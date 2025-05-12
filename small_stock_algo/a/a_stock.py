@@ -28,7 +28,9 @@ monthly_prices = monthly_groups.agg(
     month_start_date=('trade_date', 'first'),
     open_price=('open', 'first'),
     month_end_date=('trade_date', 'last'),
-    close_price=('close', 'last')
+    close_price=('close', 'last'),
+    high=('high', 'max'),  # 添加最高价
+    low=('low', 'min')     # 添加最低价
 ).reset_index()
 
 # ========== 回测主逻辑 ==========
@@ -62,9 +64,9 @@ for ym in all_months:
     excluded_tickers.update(prev_month_df[prev_month_df['monthly_return'] > 0.2]['ticker'])
 
     # 计算上个月的上影线比例
-    prev_month_df = monthly_prices[monthly_prices['year_month'] == prev_month].copy()
-    prev_month_df['upper_shadow_ratio'] = (prev_month_df['high'] - prev_month_df['close_price']) / (prev_month_df['high'] - prev_month_df['low'])
-    excluded_tickers.update(prev_month_df[prev_month_df['upper_shadow_ratio'] > 0.5]['ticker'])
+    # prev_month_df = monthly_prices[monthly_prices['year_month'] == prev_month].copy()
+    # prev_month_df['upper_shadow_ratio'] = (prev_month_df['high'] - prev_month_df['close_price']) / (prev_month_df['high'] - prev_month_df['low'])
+    # excluded_tickers.update(prev_month_df[prev_month_df['upper_shadow_ratio'] > 0.9]['ticker'])
 
     # 选择价格最低的 50 支股票
     selected = filtered.nsmallest(20, 'open_price')

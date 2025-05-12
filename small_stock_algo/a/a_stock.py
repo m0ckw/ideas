@@ -48,6 +48,19 @@ for ym in all_months:
     if filtered.empty:
         continue
 
+    # 检查上个月是否有数据
+    prev_month = ym - 1
+    if prev_month not in all_months:
+        print(f"📅 {ym} 月: 上个月没有数据，跳过交易")
+        continue
+
+    excluded_tickers = set()
+
+    # 计算上个月的涨幅
+    prev_month_df = monthly_prices[monthly_prices['year_month'] == prev_month].copy()  # 添加 .copy()
+    prev_month_df.loc[:, 'monthly_return'] = (prev_month_df['close_price'] / prev_month_df['open_price']) - 1
+    excluded_tickers.update(prev_month_df[prev_month_df['monthly_return'] > 0.2]['ticker'])
+
     # 选择价格最低的 50 支股票
     selected = filtered.nsmallest(20, 'open_price')
     selected['return'] = selected['close_price'] / selected['open_price'] - 1
@@ -58,15 +71,11 @@ for ym in all_months:
 
     print(f"📅 {ym} 月:")
     print(f"✅ 最大盈利: {best_stock['ticker']} | 买入 {best_stock['open_price']:.2f} → 卖出 {best_stock['close_price']:.2f} | 收益率 {best_stock['return']:.2%}")
-    print(f"❌ 最大亏损: {worst_stock['ticker']} | 买入 {worst_stock['open_price']:.2f} → 卍出 {worst_stock['close_price']:.2f} | 收益率 {worst_stock['return']:.2%}")
+    print(f"❌ 最大亏损: {worst_stock['ticker']} | 买入 {worst_stock['open_price']:.2f} → 卖出 {worst_stock['close_price']:.2f} | 收益率 {worst_stock['return']:.2%}")
     print('-' * 60)
 
     # 本月平均收益
     month_return = selected['return'].mean()
-
-    # 找出 top5 盈利股票，下个月剔除
-    # top5 = selected.sort_values('return', ascending=False).head(5)
-    # excluded_tickers = set(top5['ticker'])
 
     # 存储结果
     returns.append({

@@ -1,6 +1,8 @@
 import pandas as pd
 import os
 from glob import glob
+import matplotlib.pyplot as plt
+from matplotlib import rcParams
 
 
 def backtest(data_folder, file_pattern, start_date, min_price, upper_shadow_threshold, monthly_return_threshold):
@@ -104,6 +106,22 @@ def backtest(data_folder, file_pattern, start_date, min_price, upper_shadow_thre
 
     final_return = returns_df['cumulative_return'].iloc[-1] - 1
     print(f"\n📈 最终累计收益率: {final_return:.2%}")
+
+    # ========== 绘制曲线图 ==========
+    rcParams['font.sans-serif'] = ['SimSong']  # 使用黑体
+    rcParams['axes.unicode_minus'] = False  # 解决负号显示问题
+
+    plt.figure(figsize=(10, 6))
+    plt.plot(returns_df['month'], returns_df['mean_return'], label='mean_return', marker='o')
+    plt.plot(returns_df['month'], returns_df['cumulative_return'], label='cumulative_return', marker='s')
+    plt.xlabel('月份')
+    plt.ylabel('收益率')
+    plt.title('每月平均收益与累计收益曲线')
+    plt.xticks(rotation=45)
+    plt.legend()
+    plt.grid()
+    plt.tight_layout()
+    plt.show()
 
 
 # 示例调用

@@ -61,6 +61,11 @@ for ym in all_months:
     prev_month_df.loc[:, 'monthly_return'] = (prev_month_df['close_price'] / prev_month_df['open_price']) - 1
     excluded_tickers.update(prev_month_df[prev_month_df['monthly_return'] > 0.2]['ticker'])
 
+    # 计算上个月的上影线比例
+    prev_month_df = monthly_prices[monthly_prices['year_month'] == prev_month].copy()
+    prev_month_df['upper_shadow_ratio'] = (prev_month_df['high'] - prev_month_df['close_price']) / (prev_month_df['high'] - prev_month_df['low'])
+    excluded_tickers.update(prev_month_df[prev_month_df['upper_shadow_ratio'] > 0.5]['ticker'])
+
     # 选择价格最低的 50 支股票
     selected = filtered.nsmallest(20, 'open_price')
     selected['return'] = selected['close_price'] / selected['open_price'] - 1

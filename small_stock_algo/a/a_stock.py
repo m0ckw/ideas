@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from matplotlib import rcParams
 
 
-def backtest(data_folder, file_pattern, start_date, min_price, upper_shadow_threshold, monthly_return_threshold):
+def backtest(data_folder, file_pattern, start_date, min_price, plot, monthly_return_threshold):
     # ========== 加载所有股票数据 ==========
     all_files = glob(os.path.join(data_folder, file_pattern))
 
@@ -73,6 +73,35 @@ def backtest(data_folder, file_pattern, start_date, min_price, upper_shadow_thre
         selected = filtered.nsmallest(10, 'open_price')
         selected['return'] = selected['close_price'] / selected['open_price'] - 1
 
+        # 检查5日内涨幅
+        replaced = []
+        for idx, row in selected.iterrows():
+            ticker = row['ticker']
+            # 获取该股票当月的所有日线数据
+            daily = stock_data[ticker]
+            month_start = row['month_start_date']
+            # 取月初后5个交易日
+            first5 = daily[(daily['trade_date'] >= month_start)].sort_values('trade_date').head(5)
+            if len(first5) < 2:
+                continue
+            open_p = first5.iloc[0]['open']
+            max_close = first5['close'].max()
+            if (max_close / open_p - 1) > 0.05:
+                replaced.append(idx)
+
+        # 替换涨幅超15%的股票
+        for idx in replaced:
+            selected = selected.drop(idx)
+            # 从filtered中补充未被选过的股票
+            already = set(selected['ticker'])
+            candidates = filtered[~filtered['ticker'].isin(already)]
+            if not candidates.empty:
+                new_row = candidates.nsmallest(1, 'open_price')
+                selected = pd.concat([selected, new_row])
+
+        # 重新计算收益
+        selected['return'] = selected['close_price'] / selected['open_price'] - 1
+
         # 最大盈利与最大亏损
         best_stock = selected.loc[selected['return'].idxmax()]
         worst_stock = selected.loc[selected['return'].idxmin()]
@@ -107,21 +136,22 @@ def backtest(data_folder, file_pattern, start_date, min_price, upper_shadow_thre
     final_return = returns_df['cumulative_return'].iloc[-1] - 1
     print(f"\n📈 最终累计收益率: {final_return:.2%}")
 
-    # ========== 绘制曲线图 ==========
-    rcParams['font.sans-serif'] = ['SimSong']  # 使用黑体
-    rcParams['axes.unicode_minus'] = False  # 解决负号显示问题
+    if plot:
+        # ========== 绘制曲线图 ==========
+        rcParams['font.sans-serif'] = ['SimSong']  # 使用黑体
+        rcParams['axes.unicode_minus'] = False  # 解决负号显示问题
 
-    plt.figure(figsize=(10, 6))
-    plt.plot(returns_df['month'], returns_df['mean_return'], label='mean_return', marker='o')
-    plt.plot(returns_df['month'], returns_df['cumulative_return'], label='cumulative_return', marker='s')
-    plt.xlabel('月份')
-    plt.ylabel('收益率')
-    plt.title('每月平均收益与累计收益曲线')
-    plt.xticks(rotation=45)
-    plt.legend()
-    plt.grid()
-    plt.tight_layout()
-    plt.show()
+        plt.figure(figsize=(10, 6))
+        plt.plot(returns_df['month'], returns_df['mean_return'], label='mean_return', marker='o')
+        plt.plot(returns_df['month'], returns_df['cumulative_return'], label='cumulative_return', marker='s')
+        plt.xlabel('月份')
+        plt.ylabel('收益率')
+        plt.title('每月平均收益与累计收益曲线')
+        plt.xticks(rotation=45)
+        plt.legend()
+        plt.grid()
+        plt.tight_layout()
+        plt.show()
 
 
 # 示例调用
@@ -130,6 +160,6 @@ backtest(
     file_pattern='*_5years_daily.csv',
     start_date='2020-01-01',
     min_price=1.5,
-    upper_shadow_threshold=0.5,
+    plot=False,
     monthly_return_threshold=0.1
 )

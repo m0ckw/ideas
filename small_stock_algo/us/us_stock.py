@@ -29,7 +29,7 @@ PTP = ['AAAA', 'AB', 'ABENU', 'AC', 'ACP', 'AFREZ', 'AGO', 'AGQ', 'AHGP', 'AHOTF
        'ZSL', 'ZZCDH']
 
 
-def backtest(data_folder, file_pattern, start_date, min_price, monthly_return_threshold):
+def backtest(data_folder, file_pattern, start_date, min_price, number, monthly_return_threshold, plot=True):
     # ========== 加载所有股票数据 ==========
     all_files = glob(os.path.join(data_folder, file_pattern))
 
@@ -94,14 +94,14 @@ def backtest(data_folder, file_pattern, start_date, min_price, monthly_return_th
         # excluded_tickers.update(prev_month_df[prev_month_df['upper_shadow_ratio'] > upper_shadow_threshold]['ticker'])
 
         # 选择价格最低的 50 支股票
-        selected = filtered.nsmallest(10, 'open_price')
+        selected = filtered.nsmallest(number, 'open_price')
         selected['return'] = selected['close_price'] / selected['open_price'] - 1
 
         # 最大盈利与最大亏损
         best_stock = selected.loc[selected['return'].idxmax()]
         worst_stock = selected.loc[selected['return'].idxmin()]
 
-        print(f"📅 {ym} 月:")
+        print(f"📅 {ym} 月: {selected['ticker'].tolist()}")
         print(f"✅ 最大盈利: {best_stock['ticker']} | 买入 {best_stock['open_price']:.2f} → 卖出 {best_stock['close_price']:.2f} | 收益率 {best_stock['return']:.2%}")
         print(f"❌ 最大亏损: {worst_stock['ticker']} | 买入 {worst_stock['open_price']:.2f} → 卖出 {worst_stock['close_price']:.2f} | 收益率 {worst_stock['return']:.2%}")
         print('-' * 60)
@@ -132,27 +132,30 @@ def backtest(data_folder, file_pattern, start_date, min_price, monthly_return_th
     print(f"\n📈 最终累计收益率: {final_return:.2%}")
 
     # ========== 绘制曲线图 ==========
-    rcParams['font.sans-serif'] = ['SimSong']  # 使用黑体
-    rcParams['axes.unicode_minus'] = False  # 解决负号显示问题
+    if plot:
+        rcParams['font.sans-serif'] = ['SimSong']  # 使用黑体
+        rcParams['axes.unicode_minus'] = False  # 解决负号显示问题
 
-    plt.figure(figsize=(10, 6))
-    plt.plot(returns_df['month'], returns_df['mean_return'], label='mean_return', marker='o')
-    plt.plot(returns_df['month'], returns_df['cumulative_return'], label='cumulative_return', marker='s')
-    plt.xlabel('月份')
-    plt.ylabel('收益率')
-    plt.title('每月平均收益与累计收益曲线')
-    plt.xticks(rotation=45)
-    plt.legend()
-    plt.grid()
-    plt.tight_layout()
-    plt.show()
+        plt.figure(figsize=(10, 6))
+        plt.plot(returns_df['month'], returns_df['mean_return'], label='mean_return', marker='o')
+        plt.plot(returns_df['month'], returns_df['cumulative_return'], label='cumulative_return', marker='s')
+        plt.xlabel('月份')
+        plt.ylabel('收益率')
+        plt.title('每月平均收益与累计收益曲线')
+        plt.xticks(rotation=45)
+        plt.legend()
+        plt.grid()
+        plt.tight_layout()
+        plt.show()
 
 
 # 示例调用
 backtest(
     data_folder='./stocks/',
     file_pattern='*_2years_daily.csv',
-    start_date='2020-01-01',
-    min_price=1.5,
-    monthly_return_threshold=0.3
+    start_date='2025-01-01',
+    min_price=1,
+    number=10,
+    monthly_return_threshold=0.6,
+    plot=False
 )

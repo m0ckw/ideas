@@ -4,6 +4,7 @@ from glob import glob
 import matplotlib.pyplot as plt
 from matplotlib import rcParams
 
+# Publicly Traded Partnerships (PTP) 列表，这些股票将在回测中被排除
 PTP = ['AAAA', 'AB', 'ABENU', 'AC', 'ACP', 'AFREZ', 'AGO', 'AGQ', 'AHGP', 'AHOTF', 'AIA', 'AIJ', 'AIK', 'AIRL', 'ALDW', 'ALT', 'AM', 'AMJ', 'AMLP', 'AMZA', 'ANDX', 'APL', 'APLP', 'APLVF', 'APO', 'APU', 'ARCX', 'ARLP', 'ARNPQ', 'ARPJQ',
        'ARPPQ', 'ATAX', 'ATLS', 'ATN', 'AZLCZ', 'AZURQ', 'BACR', 'BAR',
        'BARS', 'BBEPQ', 'BBPPQ', 'BBU', 'BDRY', 'BEP', 'BGH', 'BIP', 'BITW', 'BKEP', 'BKEPP', 'BNO', 'BNP', 'BNPC', 'BOIL', 'BPL', 'BPMP', 'BPY', 'BPYPM', 'BPYPN', 'BPYPO', 'BPYPP', 'BRENF', 'BRIPF', 'BSM', 'BTOU', 'BVERS', 'BWET', 'BWP',
@@ -29,13 +30,13 @@ PTP = ['AAAA', 'AB', 'ABENU', 'AC', 'ACP', 'AFREZ', 'AGO', 'AGQ', 'AHGP', 'AHOTF
        'ZSL', 'ZZCDH']
 
 
-def backtest(data_folder, file_pattern, start_date, min_price, number, monthly_return_threshold, plot=True):
+def backtest(data_folder, file_pattern, start_date, end_date, min_price, number, monthly_return_threshold, plot=True):
     # ========== 加载所有股票数据 ==========
     all_files = glob(os.path.join(data_folder, file_pattern))
 
     stock_data = {}
     for file_path in all_files:
-        ticker = os.path.basename(file_path).split('_')[0]
+        ticker = os.path.basename(file_path).split('.')[0]
         df = pd.read_csv(file_path, parse_dates=['date'])
         df['ticker'] = ticker
         stock_data[ticker] = df
@@ -43,8 +44,9 @@ def backtest(data_folder, file_pattern, start_date, min_price, number, monthly_r
     combined_df = pd.concat(stock_data.values())
     combined_df.sort_values(['ticker', 'date'], inplace=True)
 
-    # 过滤交易起始时间
+    # 过滤交易时间范围
     combined_df = combined_df[combined_df['date'] >= pd.to_datetime(start_date)]
+    combined_df = combined_df[combined_df['date'] <= pd.to_datetime(end_date)]
 
     # ========== 提取每月月初/月末价格 ==========
     combined_df['year_month'] = combined_df['date'].dt.to_period('M')
@@ -54,7 +56,10 @@ def backtest(data_folder, file_pattern, start_date, min_price, number, monthly_r
         month_start_date=('date', 'first'),
         open_price=('open', 'first'),
         month_end_date=('date', 'last'),
-        close_price=('close', 'last')
+        close_price=('close', 'last'),
+        high=('high', 'max'),
+        low=('low', 'min'),
+        volume=('volume', 'sum')
     ).reset_index()
 
     # ========== 回测主逻辑 ==========
@@ -78,6 +83,9 @@ def backtest(data_folder, file_pattern, start_date, min_price, number, monthly_r
         prev_month_df = monthly_prices[monthly_prices['year_month'] == prev_month].copy()
         prev_month_df.loc[:, 'monthly_return'] = (prev_month_df['close_price'] / prev_month_df['open_price']) - 1
         excluded_tickers.update(prev_month_df[prev_month_df['monthly_return'] > monthly_return_threshold]['ticker'])
+        excluded_tickers.update(prev_month_df[prev_month_df['monthly_return'] < -0.5]['ticker'])
+        excluded_tickers.update(prev_month_df[prev_month_df['volume'] > 700000000]['ticker'])
+
 
         # 仅保留股价 >= min_price 且不在剔除名单中的股票
         filtered = month_df[
@@ -89,25 +97,29 @@ def backtest(data_folder, file_pattern, start_date, min_price, number, monthly_r
         if filtered.empty:
             continue
 
-        # 计算上个月的上影线比例
-        # prev_month_df['upper_shadow_ratio'] = (prev_month_df['high'] - prev_month_df['close_price']) / (prev_month_df['high'] - prev_month_df['low'])
-        # excluded_tickers.update(prev_month_df[prev_month_df['upper_shadow_ratio'] > upper_shadow_threshold]['ticker'])
-
-        # 选择价格最低的 50 支股票
+        # 选择价格最低的 number 支股票
         selected = filtered.nsmallest(number, 'open_price')
+        if len(selected) < number:
+            print(f"📅 {ym} 月: 没有符合条件的股票，跳过交易")
+            continue
         selected['return'] = selected['close_price'] / selected['open_price'] - 1
+        selected.sort_values('open_price', inplace=True)
 
         # 最大盈利与最大亏损
         best_stock = selected.loc[selected['return'].idxmax()]
         worst_stock = selected.loc[selected['return'].idxmin()]
 
         print(f"📅 {ym} 月: {selected['ticker'].tolist()}")
-        print(f"✅ 最大盈利: {best_stock['ticker']} | 买入 {best_stock['open_price']:.2f} → 卖出 {best_stock['close_price']:.2f} | 收益率 {best_stock['return']:.2%}")
-        print(f"❌ 最大亏损: {worst_stock['ticker']} | 买入 {worst_stock['open_price']:.2f} → 卖出 {worst_stock['close_price']:.2f} | 收益率 {worst_stock['return']:.2%}")
+        month_return = selected['return'].mean()
+        # 打印所有选中股票的收益率
+        for _, row in selected.iterrows():
+            print(f"  {row['ticker']}: 买入 {row['open_price']:.2f} → 卖出 {row['close_price']:.2f} | 收益率 {row['return']:.2%}")
+        print("  平均收益率: {:.2%}".format(month_return))
+        # print(f"✅ 最大盈利: {best_stock['ticker']} | 买入 {best_stock['open_price']:.2f} → 卖出 {best_stock['close_price']:.2f} | 收益率 {best_stock['return']:.2%}")
+        # print(f"❌ 最大亏损: {worst_stock['ticker']} | 买入 {worst_stock['open_price']:.2f} → 卖出 {worst_stock['close_price']:.2f} | 收益率 {worst_stock['return']:.2%}")
         print('-' * 60)
 
         # 本月平均收益
-        month_return = selected['return'].mean()
 
         # 存储结果
         returns.append({
@@ -133,15 +145,14 @@ def backtest(data_folder, file_pattern, start_date, min_price, number, monthly_r
 
     # ========== 绘制曲线图 ==========
     if plot:
-        rcParams['font.sans-serif'] = ['SimSong']  # 使用黑体
-        rcParams['axes.unicode_minus'] = False  # 解决负号显示问题
+        rcParams['axes.unicode_minus'] = False
 
         plt.figure(figsize=(10, 6))
-        plt.plot(returns_df['month'], returns_df['mean_return'], label='mean_return', marker='o')
-        plt.plot(returns_df['month'], returns_df['cumulative_return'], label='cumulative_return', marker='s')
-        plt.xlabel('月份')
-        plt.ylabel('收益率')
-        plt.title('每月平均收益与累计收益曲线')
+        plt.plot(returns_df['month'], returns_df['mean_return'], label='Monthly average income', marker='o')
+        plt.plot(returns_df['month'], returns_df['cumulative_return'], label='cumulative gain', marker='s')
+        plt.xlabel('Month')
+        plt.ylabel('Yield rate')
+        plt.title('Monthly average income and cumulative income curve')
         plt.xticks(rotation=45)
         plt.legend()
         plt.grid()
@@ -152,8 +163,9 @@ def backtest(data_folder, file_pattern, start_date, min_price, number, monthly_r
 # 示例调用
 backtest(
     data_folder='./stocks/',
-    file_pattern='*_2years_daily.csv',
-    start_date='2025-01-01',
+    file_pattern='*.csv',
+    start_date='2020-01-01',
+    end_date='2023-12-31',
     min_price=1,
     number=10,
     monthly_return_threshold=0.6,
